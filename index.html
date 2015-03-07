@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>Lava-Jato</title>
+    <style>
+        html {
+            height:100%;
+            width: 900px;
+        }
+        #chart {
+            width:100%;
+            height: 900px;
+        }
+
+        .node rect {
+            cursor: move;
+            fill-opacity: .9;
+            shape-rendering: crispEdges;
+        }
+
+        .node text {
+            pointer-events: none;
+            text-shadow: 0 1px 0 #fff;
+        }
+
+        .link {
+            fill: none;
+            stroke: #000;
+            stroke-opacity: .2;
+        }
+
+        .link:hover {
+            stroke-opacity: .5;
+        }
+
+    </style>
+    <script src="d3.min.js"></script>
+    <script src="jquery.min.js"></script>
+    <script src="sankey.js"></script>
+</head>
+<body>
+
+<div id="chart"></div>
+<script>
+function shuffle(array) {
+    var currentIndex = array.length, temporaryValue, randomIndex ;
+
+    // While there remain elements to shuffle...
+    while (0 !== currentIndex) {
+
+        // Pick a remaining element...
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex -= 1;
+
+        // And swap it with the current element.
+        temporaryValue = array[currentIndex];
+        array[currentIndex] = array[randomIndex];
+        array[randomIndex] = temporaryValue;
+    }
+
+    return array;
+}
+
+var cores = [
+    "#8F7D59",
+    "#8F5959",
+    "#8F597D",
+    "#8F598F",
+    "#7D598F",
+    "#59598F",
+    "#598F7D",
+    "#598F59"
+
+]
+
+var partidos = {
+    "PT"       :["#a00200",1],
+    "PST"      :["#a51001",2],
+    "PL"       :["#aa1d01",3],
+    "PTC"      :["#b02b01",4],
+    "PCdoB"    :["#b53901",5],
+    "PP"       :["#ba4601",6],
+    "PPB"       :["#ba4601",6],
+    "PRB"      :["#bf5301",7],
+    "PSL"      :["#c46102",8],
+    "PPL"      :["#ca6f03",9],
+    "PSB"      :["#cf7d03",10],
+    "PMDB"     :["#d48b03",11],
+    "PROS"     :["#d99803",12],
+    "PRTB"     :["#dea604",13],
+    "PTB"      :["#e4b304",14],
+    "PRP"      :["#e9c104",15],
+    "PDT"      :["#eece04",16],
+    "PHS"      :["#f3dc05",17],
+    "PR"       :["#f4e509",18],
+    "PTN"     :["#f4e509",19],
+    "PSC"      :["#eae116",20],
+    "PMR"      :["#dfdd24",20],
+    "PTdoB"    :["#d5d931",21],
+    "PV"       :["#cad63e",22],
+    "PMN"      :["#c0d24b",23],
+    "PSD"      :["#b6ce58",24],
+    "PEN"      :["#abc966",25],
+    "SDD"      :["#a1c673",26],
+    "PSOL"     :["#97c281",27],
+    "PPS"      :["#8cbe8e",28],
+    "DEM"      :["#82ba9b",29],
+    "PFL_DEM"  :["#77b6a8",30],
+    "PSDB"     :["#6db3b6",31],
+    "PRONA"    :["#62afc3",32],
+    "PAN"      :["#58abd0",33],
+    "PSDC"     :["#4da7de",34],
+
+    // "ZZZ"   :["#43a3eb",35],
+    "S.Part."   :["#999999",36]
+}
+
+
+var formatNumber = d3.format(",.0f"),
+    format = function(d) { return ("R$ "+formatNumber(d)).replace(",",".").replace(",","."); },
+    color = d3.scale.category20();
+
+var width = $("#chart").width()*0.95
+var height = $("#chart").height()*0.9
+
+var svg = d3.select("#chart").append("svg")
+        .attr("width", "100%")
+        .attr("height", "100%")
+        .append("g")
+
+var sankey = d3.sankey()
+        .nodeWidth(15)
+        .nodePadding(10)
+        .size([width, height]);
+
+var path = sankey.link();
+
+d3.json("energy.json", function(energy) {
+    energy.links = $.grep(energy.links, function( n, i ) {
+        return n.value > 0;
+    });
+
+    sankey
+            .nodes(energy.nodes)
+            .links(energy.links)
+            .layout(32);
+
+    var link = svg.append("g").selectAll(".link")
+            .data(energy.links)
+            .enter().append("path")
+            .attr("class", "link")
+            .attr("d", path)
+            .style("stroke-width", function(d) { return Math.max(1, d.dy); })
+            .sort(function(a, b) { return b.dy - a.dy; });
+
+    link.append("title")
+            .text(function(d) { return d.source.name + " → " + d.target.name + "\n" + format(d.value); });
+
+    var node = svg.append("g").selectAll(".node")
+            .data(energy.nodes)
+            .enter().append("g")
+            .attr("class", "node")
+            .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; })
+            .call(d3.behavior.drag()
+                    .origin(function(d) { return d; })
+                    .on("dragstart", function() { this.parentNode.appendChild(this); })
+                    .on("drag", dragmove));
+
+    node.append("rect")
+            .attr("height", function(d) { return d.dy; })
+            .attr("width", sankey.nodeWidth())
+            .style("fill", function(d) {
+                if (d.group == "Empresa") {
+                    var cor = shuffle(cores)[0]
+                    return cor
+                } else {
+                    var partido = d.name.split("-")[0].split("(")[1]
+                    if (partido in partidos) {
+                        return partidos[partido][0]
+                    }
+                }
+            })
+            .style("stroke", function(d) { console.log(d); })
+            .append("title")
+            .text(function(d) { return d.name + "\n" + format(d.value); });
+
+    node.append("text")
+            .attr("x", -6)
+            .attr("y", function(d) { return d.dy / 2; })
+            .attr("dy", ".35em")
+            .attr("text-anchor", "end")
+            .attr("transform", null)
+            .text(function(d) { return d.name; })
+            .filter(function(d) { return d.x < width / 2; })
+            .attr("x", 6 + sankey.nodeWidth())
+            .attr("text-anchor", "start");
+
+    function dragmove(d) {
+        d3.select(this).attr("transform", "translate(" + d.x + "," + (d.y = Math.max(0, Math.min(height - d.dy, d3.event.y))) + ")");
+        sankey.relayout();
+        link.attr("d", path);
+    }
+});
+
+</script>
+</body>
+</html>
